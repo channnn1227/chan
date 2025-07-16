@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>모바일 TODO 리스트 (iOS 호환)</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    input, select, button { margin: 5px 0; padding: 10px; width: 100%; font-size: 1em; }
+    li { margin: 8px 0; font-size: 1.1em; }
+    .done { text-decoration: line-through; color: gray; }
+    .tag { font-size: 0.8em; margin-left: 8px; color: #555; }
+    .category { font-weight: bold; margin-top: 20px; }
+    .highlight { background-color: yellow; }
+    .overdue { background-color: #ffdddd; }
+  </style>
+</head>
+<body>
+  <h2>📆 TODO 리스트</h2>
+  <p>iOS에서 홈 화면에 이 앱을 추가하려면:</p>
+  <ol>
+    <li>Safari에서 이 페이지를 엽니다</li>
+    <li>하단 공유 버튼 <strong>(⤴️)</strong>을 누릅니다</li>
+    <li><strong>"홈 화면에 추가"</strong>를 선택하세요</li>
+    <li>이제 이 앱을 아이콘처럼 실행할 수 있어요!</li>
+  </ol>
+  <input type="text" id="taskInput" placeholder="할 일" />
+  <input type="date" id="dateInput" />
+  <select id="priorityInput">
+    <option value="낮음">🔹 낮음</option>
+    <option value="보통" selected>🔸 보통</option>
+    <option value="높음">🔺 높음</option>
+  </select>
+  <input type="text" id="categoryInput" placeholder="카테고리 입력 (예: 업무, 개인)" />
+  <select id="repeatInput">
+    <option value="없음">반복 없음</option>
+    <option value="매일">매일</option>
+    <option value="매주">매주</option>
+    <option value="매달">매달</option>
+  </select>
+  <input type="time" id="deadlineInput" placeholder="마감 시간 (선택)" />
+  <button onclick="addTask()">추가</button>
+
+  <div id="taskSections"></div>
+
+  <script>
+    const taskInput = document.getElementById("taskInput");
+    const dateInput = document.getElementById("dateInput");
+    const priorityInput = document.getElementById("priorityInput");
+    const categoryInput = document.getElementById("categoryInput");
+    const repeatInput = document.getElementById("repeatInput");
+    const deadlineInput = document.getElementById("deadlineInput");
+    const taskSections = document.getElementById("taskSections");
+
+    function getNextDate(dateStr, repeat) {
+      const date = new Date(dateStr);
+      if (repeat === "매일") date.setDate(date.getDate() + 1);
+      if (repeat === "매주") date.setDate(date.getDate() + 7);
+      if (repeat === "매달") date.setMonth(date.getMonth() + 1);
+      return date.toISOString().slice(0, 10);
+    }
+
+    function saveTasks(tasks = null) {
+      if (!tasks) {
+        tasks = [];
+        document.querySelectorAll("li").forEach(li => {
+          tasks.push({
+            text: li.querySelector(".text").textContent,
+            date: li.querySelector(".date").textContent,
+            priority: li.querySelector(".priority").textContent,
+            category: li.querySelector(".categoryTag").textContent,
+            repeat: li.querySelector(".repeatTag").textContent,
+            deadline: li.querySelector(".deadline")?.textContent || "",
+            done: li.classList.contains("done")
+          });
+        });
+      }
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    }
+
+    function loadTasks() {
+      const saved = localStorage.getItem("tasks");
+      if (!saved) return;
+      let tasks = JSON.parse(saved);
+
+      const today = new Date().toISOString().slice(0, 10);
+      const newTasks = [];
+
+      tasks.forEach(t => {
+        if (t.repeat !== "없음" && t.date < today) {
+          let nextDate = getNextDate(t.date, t.repeat);
+          newTasks.push({ ...t, date: nextDate, done: false });
+        } else {
+          newTasks.push(t);
+        }
+      });
+
+      taskSections.innerHTML = "";
+      newTasks.forEach(t => addTask(t.text, t.date, t.priority, t.done, t.category, t.repeat, false, t.deadline));
+      saveTasks(newTasks);
+    }
+
+    function createCategorySection(category) {
+      let section = document.querySelector(`#section-${category}`);
+      if (!section) {
+        section = document.createElement("div");
+        section.id = `section-${category}`;
+        const header = document.createElement("h3");
+        header.textContent = `📂 ${category}`;
+        header.className = "category";
+        section.appendChild(header);
+        const ul = document.createElement("ul");
+        section.appendChild(ul);
+        taskSections.appendChild(section);
+      }
+      return section.querySelector("ul");
+    }
+
+    function addTask(text, date, priority, done = false, category = null, repeat = "없음", save = true, deadline = "") {
+      if (!text) text = taskInput.value.trim();
+      if (!text) return;
+      if (!date) date = dateInput.value;
+      if (!priority) priority = priorityInput.value;
+      if (!category) category = categoryInput.value.trim() || "기타";
+      if (!deadline) deadline = deadlineInput.value;
+
+      const ul = createCategorySection(category);
+      const li = document.createElement("li");
+      if (done) li.classList.add("done");
+
+      const today = new Date();
+      const taskDate = new Date(date + (deadline ? 'T' + deadline : 'T23:59'));
+
+      if (taskDate.toDateString() === today.toDateString() || taskDate.toDateString() === new Date(today.getTime() + 86400000).toDateString()) {
+        li.classList.add("highlight");
+      } else if (taskDate < today && !done) {
+        li.classList.add("overdue");
+      }
+
+      const spanText = document.createElement("span");
+      spanText.textContent = text;
+      spanText.className = "text";
+      li.appendChild(spanText);
+
+      const spanDate = document.createElement("span");
+      spanDate.textContent = date;
+      spanDate.className = "tag date";
+      li.appendChild(spanDate);
+
+      const spanDeadline = document.createElement("span");
+      if (deadline) {
+        spanDeadline.textContent = deadline;
+        spanDeadline.className = "tag deadline";
+        li.appendChild(spanDeadline);
+      }
+
+      const spanPriority = document.createElement("span");
+      spanPriority.textContent = priority;
+      spanPriority.className = "tag priority";
+      li.appendChild(spanPriority);
+
+      const spanCategory = document.createElement("span");
+      spanCategory.textContent = category;
+      spanCategory.className = "tag categoryTag";
+      li.appendChild(spanCategory);
+
+      const spanRepeat = document.createElement("span");
+      spanRepeat.textContent = repeat;
+      spanRepeat.className = "tag repeatTag";
+      li.appendChild(spanRepeat);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "삭제";
+      deleteBtn.onclick = () => {
+        li.remove();
+        saveTasks();
+      };
+      li.appendChild(deleteBtn);
+
+      li.onclick = function(e) {
+        if (e.target.tagName !== "BUTTON") {
+          li.classList.toggle("done");
+          saveTasks();
+        }
+      };
+
+      ul.appendChild(li);
+      taskInput.value = "";
+      dateInput.value = "";
+      priorityInput.value = "보통";
+      categoryInput.value = "";
+      repeatInput.value = "없음";
+      deadlineInput.value = "";
+
+      if (save) saveTasks();
+    }
+
+    loadTasks();
+  </script>
+</body>
+</html>
