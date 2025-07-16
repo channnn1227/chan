@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TODO 리스트 (시작일+마감일)</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    input, select, button { margin: 5px 0; padding: 10px; width: 100%; font-size: 1em; }
+    li { margin: 8px 0; font-size: 1.1em; list-style-type: none; padding-left: 0; }
+    .done { text-decoration: line-through; color: gray; }
+    .tag { font-size: 0.8em; margin-left: 8px; color: #555; background-color: #f0f0f0; padding: 2px 6px; border-radius: 4px;}
+    .category { font-weight: bold; margin-top: 20px; }
+    .highlight { background-color: yellow; }
+    .overdue { background-color: #ffdddd; }
+  </style>
+</head>
+<body>
+  <h2>📆 TODO 리스트 (시작일 + 마감일)</h2>
+  <input type="text" id="taskInput" placeholder="할 일" />
+  <label>시작일</label>
+  <input type="date" id="startDateInput" />
+  <input type="time" id="startTimeInput" />
+  <label>마감일</label>
+  <input type="date" id="endDateInput" />
+  <input type="time" id="endTimeInput" />
+  <input type="text" id="categoryInput" placeholder="카테고리 (예: 업무)" />
+  <select id="priorityInput">
+    <option value="낮음">🔹 낮음</option>
+    <option value="보통" selected>🔸 보통</option>
+    <option value="높음">🔺 높음</option>
+  </select>
+  <select id="repeatInput">
+    <option value="없음">반복 없음</option>
+    <option value="매일">매일</option>
+    <option value="매주">매주</option>
+    <option value="매달">매달</option>
+  </select>
+  <button onclick="addTask()">추가</button>
+  <div id="taskSections"></div>
+
+  <script>
+    const taskInput = document.getElementById("taskInput");
+    const startDateInput = document.getElementById("startDateInput");
+    const startTimeInput = document.getElementById("startTimeInput");
+    const endDateInput = document.getElementById("endDateInput");
+    const endTimeInput = document.getElementById("endTimeInput");
+    const categoryInput = document.getElementById("categoryInput");
+    const priorityInput = document.getElementById("priorityInput");
+    const repeatInput = document.getElementById("repeatInput");
+    const taskSections = document.getElementById("taskSections");
+
+    function formatDateTime(date, time) {
+      if (!date) return "";
+      const d = new Date(date + "T" + (time || "00:00"));
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      return `${yyyy}.${mm}.${dd} ${hh}:${min}`;
+    }
+
+    function createCategorySection(category) {
+      let section = document.querySelector(`#section-${category}`);
+      if (!section) {
+        section = document.createElement("div");
+        section.id = `section-${category}`;
+        const header = document.createElement("h3");
+        header.textContent = `📂 ${category}`;
+        header.className = "category";
+        section.appendChild(header);
+        const ul = document.createElement("ul");
+        section.appendChild(ul);
+        taskSections.appendChild(section);
+      }
+      return section.querySelector("ul");
+    }
+
+    function saveTasks() {
+      const tasks = [];
+      document.querySelectorAll("li").forEach(li => {
+        tasks.push({
+          text: li.querySelector(".text").textContent,
+          start: li.querySelector(".start")?.textContent || "",
+          deadline: li.querySelector(".deadline")?.textContent || "",
+          category: li.querySelector(".categoryTag")?.textContent || "",
+          priority: li.querySelector(".priority")?.textContent || "",
+          repeat: li.querySelector(".repeatTag")?.textContent || "",
+          done: li.classList.contains("done")
+        });
+      });
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    }
+
+    function loadTasks() {
+      const saved = localStorage.getItem("tasks");
+      if (!saved) return;
+      const tasks = JSON.parse(saved);
+      taskSections.innerHTML = "";
+      tasks.forEach(t => addTask(t.text, t.start, t.deadline, t.done, t.category, t.priority, t.repeat, false));
+    }
+
+    function addTask(text, start = "", deadline = "", done = false, category = "기타", priority = "보통", repeat = "없음", save = true) {
+      if (!text) text = taskInput.value.trim();
+      if (!text) return;
+
+      if (!start) start = formatDateTime(startDateInput.value, startTimeInput.value);
+      if (!deadline) deadline = formatDateTime(endDateInput.value, endTimeInput.value);
+      if (!category) category = categoryInput.value.trim() || "기타";
+
+      const ul = createCategorySection(category);
+      const li = document.createElement("li");
+      if (done) li.classList.add("done");
+
+      const now = new Date();
+      const deadlineObj = new Date(deadline.replace(/\./g, '-').replace(' ', 'T'));
+      if (!done && deadlineObj < now) li.classList.add("overdue");
+      else if (!done && deadlineObj.toDateString() === now.toDateString()) li.classList.add("highlight");
+
+      const spanText = document.createElement("span");
+      spanText.className = "text";
+      spanText.textContent = text;
+      li.appendChild(spanText);
+
+      if (start) {
+        const spanStart = document.createElement("span");
+        spanStart.className = "tag start";
+        spanStart.textContent = start;
+        li.appendChild(spanStart);
+      }
+
+      if (deadline) {
+        const spanDeadline = document.createElement("span");
+        spanDeadline.className = "tag deadline";
+        spanDeadline.textContent = deadline;
+        li.appendChild(spanDeadline);
+      }
+
+      const spanPriority = document.createElement("span");
+      spanPriority.textContent = priority;
+      spanPriority.className = "tag priority";
+      li.appendChild(spanPriority);
+
+      const spanCategory = document.createElement("span");
+      spanCategory.textContent = category;
+      spanCategory.className = "tag categoryTag";
+      li.appendChild(spanCategory);
+
+      const spanRepeat = document.createElement("span");
+      spanRepeat.textContent = repeat;
+      spanRepeat.className = "tag repeatTag";
+      li.appendChild(spanRepeat);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "삭제";
+      deleteBtn.onclick = () => {
+        li.remove();
+        saveTasks();
+      };
+      li.appendChild(deleteBtn);
+
+      li.onclick = function(e) {
+        if (e.target.tagName !== "BUTTON") {
+          li.classList.toggle("done");
+          saveTasks();
+        }
+      };
+
+      ul.appendChild(li);
+
+      if (save) {
+        taskInput.value = "";
+        startDateInput.value = "";
+        startTimeInput.value = "";
+        endDateInput.value = "";
+        endTimeInput.value = "";
+        categoryInput.value = "";
+        priorityInput.value = "보통";
+        repeatInput.value = "없음";
+        saveTasks();
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", loadTasks);
+  </script>
+</body>
+</html>
